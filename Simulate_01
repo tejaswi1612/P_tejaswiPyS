@@ -30,8 +30,9 @@ print("STEP 1  source committed")
 # Detector above the lamp (center ~ 5,5,20 mm)
 sensor = p.create_sensor(name="Sensor.1")
 sensor.axis_system = [5, 5, 20, 1, 0, 0, 0, 1, 0, 0, 0, 1]
+sensor.integration_direction=[0,0,-1]
 sensor.commit()
-print("STEP 2  sensor committed at z=20 mm")
+print("STEP 2  sensor looks towards the lamp(-Z)")
 
 sim = p.create_simulation(name="Direct.1", feature_type=SimulationDirect)
 sim.sensor_paths = [sensor]
