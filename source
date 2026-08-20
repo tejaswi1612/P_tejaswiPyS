@@ -1,0 +1,36 @@
+from ansys.speos.core.speos import Speos
+from ansys.speos.core.project import Project
+from ansys.speos.core.face import Face
+from ansys.speos.core.source import SourceSurface
+from ansys.speos.core.kernel.client import default_local_channel
+
+speos = Speos(channel=default_local_channel(port=50098))
+p = Project(speos=speos)
+
+# Detector (same as yesterday)
+sensor = p.create_sensor(name="Sensor.1")
+sensor.commit()
+print("STEP 1  sensor:", type(sensor).__name__, "count", len(p.sensors))
+
+# CAD: root part -> body -> one triangle in the XY plane, normal +Z
+root = p.create_root_part().commit()
+body = root.create_body(name="TheBodyB").commit()
+face = body.create_face(name="TheFaceF")
+face.vertices = [0, 0, 0, 10, 0, 0, 0, 10, 0]   # three points, mm
+face.facets = [0, 1, 2]                          # one triangle
+face.normals = [0, 0, 1, 0, 0, 1, 0, 0, 1]       # all point +Z
+face.commit()
+print("STEP 2  face committed  TheBodyB/TheFaceF")
+
+face1 = p.find(name="TheBodyB/TheFaceF", feature_type=Face)[0]
+
+source = p.create_source(name="Source.1", feature_type=SourceSurface)
+source.set_exitance_constant().geometries = [(face1, False)]  # False = do not flip normal
+source.commit()
+print("STEP 3  source committed:", type(source).__name__, "count", len(p.sources))
+
+print("STEP 4  sensors", p.sensors)
+print("         sources", p.sources)
+
+speos.close()
+print("STEP 5  closed")
