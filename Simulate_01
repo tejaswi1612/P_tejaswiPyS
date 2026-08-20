@@ -1,0 +1,61 @@
+from pathlib import Path
+
+from ansys.speos.core.speos import Speos
+from ansys.speos.core.project import Project
+from ansys.speos.core.face import Face
+from ansys.speos.core.source import SourceSurface
+from ansys.speos.core.simulation import SimulationDirect
+from ansys.speos.core.kernel.client import default_local_channel
+
+OUT = Path(r"C:\T1\Python")  # use C:\1\Python if that is your folder
+
+speos = Speos(channel=default_local_channel(port=50098))
+p = Project(speos=speos)
+
+# Lamp: triangle in z=0, light toward +Z
+root = p.create_root_part().commit()
+body = root.create_body(name="TheBodyB").commit()
+face = body.create_face(name="TheFaceF")
+face.vertices = [0, 0, 0, 10, 0, 0, 0, 10, 0]
+face.facets = [0, 1, 2]
+face.normals = [0, 0, 1, 0, 0, 1, 0, 0, 1]
+face.commit()
+face1 = p.find(name="TheBodyB/TheFaceF", feature_type=Face)[0]
+
+source = p.create_source(name="Source.1", feature_type=SourceSurface)
+source.set_exitance_constant().geometries = [(face1, False)]
+source.commit()
+print("STEP 1  source committed")
+
+# Detector above the lamp (center ~ 5,5,20 mm)
+sensor = p.create_sensor(name="Sensor.1")
+sensor.axis_system = [5, 5, 20, 1, 0, 0, 0, 1, 0, 0, 0, 1]
+sensor.commit()
+print("STEP 2  sensor committed at z=20 mm")
+
+sim = p.create_simulation(name="Direct.1", feature_type=SimulationDirect)
+sim.sensor_paths = [sensor]
+sim.source_paths = [source]
+sim.stop_condition_rays_number = 20000  # small on purpose
+sim.commit()
+print("STEP 3  simulation committed — computing CPU (wait)...")
+
+results = sim.compute_CPU()
+print("STEP 4  compute finished")
+print("         results:", results)
+print("         result_list:", sim.result_list)
+
+# Preview picture of the result XMP if Speos wrote one
+try:
+    from ansys.speos.core.workflow.open_result import export_xmp_to_image
+
+    png_info = export_xmp_to_image(simulation_feature=sim, result_name="Sensor.1")
+    print("STEP 5  export_xmp_to_image:", png_info)
+except Exception as e:
+    print("STEP 5  PNG export skipped:", e)
+    maps = speos.client.maps()
+    for item in sim.result_list or []:
+        print("         result item:", item)
+
+speos.close()
+print("STEP 6  closed")
