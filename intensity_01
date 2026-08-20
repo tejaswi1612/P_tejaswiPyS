@@ -1,0 +1,43 @@
+from ansys.speos.core.speos import Speos
+from ansys.speos.core.project import Project
+from ansys.speos.core.face import Face
+from ansys.speos.core.source import SourceSurface
+from ansys.speos.core.sensor import SensorXMPIntensity
+from ansys.speos.core.simulation import SimulationDirect
+from ansys.speos.core.kernel.client import default_local_channel
+
+speos = Speos(channel=default_local_channel(port=50098))
+p = Project(speos=speos)
+
+root = p.create_root_part().commit()
+body = root.create_body(name="TheBodyB").commit()
+face = body.create_face(name="TheFaceF")
+face.vertices = [0, 0, 0, 10, 0, 0, 0, 10, 0]
+face.facets = [0, 1, 2]
+face.normals = [0, 0, 1, 0, 0, 1, 0, 0, 1]
+face.commit()
+face1 = p.find(name="TheBodyB/TheFaceF", feature_type=Face)[0]
+
+source = p.create_source(name="Source.1", feature_type=SourceSurface)
+source.set_exitance_constant().geometries = [(face1, False)]
+source.commit()
+print("STEP 1  lamp ok")
+
+# Intensity map: angles in degrees (like the demo ±45 x ±30), not mm
+sensor = p.create_sensor(name="Intensity.1", feature_type=SensorXMPIntensity)
+sensor.x_start, sensor.x_end = -45, 45
+sensor.y_start, sensor.y_end = -30, 30
+sensor.x_sampling, sensor.y_sampling = 90, 60
+sensor.axis_system = [5, 5, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1]
+sensor.commit()
+print("STEP 2  intensity sensor (candela vs angle) ok")
+
+sim = p.create_simulation(name="Direct.1", feature_type=SimulationDirect)
+sim.sensor_paths = [sensor]
+sim.source_paths = [source]
+sim.stop_condition_rays_number = 80000
+sim.commit()
+print("STEP 3  computing...")
+print(sim.compute_CPU())
+speos.close()
+print("STEP 4  closed — open Intensity.1.xmp in VPL, check units are cd not lx")
