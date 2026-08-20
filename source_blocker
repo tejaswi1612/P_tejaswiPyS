@@ -1,0 +1,59 @@
+from ansys.speos.core.speos import Speos
+from ansys.speos.core.project import Project
+from ansys.speos.core.face import Face
+from ansys.speos.core.source import SourceSurface
+from ansys.speos.core.simulation import SimulationDirect
+from ansys.speos.core.kernel.client import default_local_channel
+
+speos = Speos(channel=default_local_channel(port=50098))
+p = Project(speos=speos)
+
+root = p.create_root_part().commit()
+
+# --- lamp face (emits because it is the SOURCE, not because of paint) ---
+body_lamp = root.create_body(name="TheBodyB").commit()
+face_lamp = body_lamp.create_face(name="TheFaceF")
+face_lamp.vertices = [0, 0, 0, 10, 0, 0, 0, 10, 0]
+face_lamp.facets = [0, 1, 2]
+face_lamp.normals = [0, 0, 1, 0, 0, 1, 0, 0, 1]
+face_lamp.commit()
+face1 = p.find(name="TheBodyB/TheFaceF", feature_type=Face)[0]
+
+source = p.create_source(name="Source.1", feature_type=SourceSurface)
+source.set_exitance_constant().geometries = [(face1, False)]
+source.commit()
+print("STEP 1  lamp source ok")
+
+# --- blocker plate at z=10 (needs optical properties or Speos treats it as nothing useful) ---
+body_block = root.create_body(name="TheBodyBlock").commit()
+face_block = body_block.create_face(name="TheFaceBlock")
+# square 0..6 mm, halfway to the sensor — covers part of the lamp
+face_block.vertices = [0, 0, 10, 6, 0, 10, 6, 6, 10, 0, 6, 10]
+face_block.facets = [0, 1, 2, 0, 2, 3]
+face_block.normals = [0, 0, 1] * 4
+face_block.commit()
+print("STEP 2  blocker geometry ok")
+
+mat = p.create_optical_property(name="Material.Block")
+mat.set_volume_opaque()          # volume: light does not go through
+mat.set_surface_mirror()
+mat.sop_mirror.reflectance = 0   # surface: black, no bounce
+mat.geometries = [body_block]    # ONLY the blocker — not the lamp
+mat.commit()
+print("STEP 3  opaque SOP/VOP on blocker only")
+
+sensor = p.create_sensor(name="Sensor.1")
+sensor.axis_system = [5, 5, 20, 1, 0, 0, 0, 1, 0, 0, 0, 1]
+sensor.integration_direction = [0, 0, -1]
+sensor.commit()
+print("STEP 4  sensor looking at the lamp")
+
+sim = p.create_simulation(name="Direct.1", feature_type=SimulationDirect)
+sim.sensor_paths = [sensor]
+sim.source_paths = [source]
+sim.stop_condition_rays_number = 80000
+sim.commit()
+print("STEP 5  computing...")
+print(sim.compute_CPU())
+speos.close()
+print("STEP 6  closed — open the NEW Sensor.1.xmp in VPL (newest folder under Temp\\jobs)")
