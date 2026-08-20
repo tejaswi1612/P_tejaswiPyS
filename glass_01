@@ -46,8 +46,11 @@ print("STEP 2  glass box geometry ok")
 
 mat = p.create_optical_property(name="Material.Glass")
 mat.set_surface_opticalpolished()
-mat.set_volume_optic(index=1.5, absorption=0.0, constringence=60)
-mat.geometries = [body_g]  # glass on the box only, not the lamp
+optic = mat.set_volume_optic()
+optic.index = 1.5
+optic.absorption = 0.0
+optic.constringence = 60
+mat.geometries = [body_g]
 mat.commit()
 print("STEP 3  glass SOP/VOP committed")
 
