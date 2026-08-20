@@ -1,0 +1,40 @@
+from pathlib import Path
+
+from ansys.speos.core.speos import Speos
+from ansys.speos.core.project import Project
+from ansys.speos.core.face import Face
+from ansys.speos.core.source import SourceSurface
+from ansys.speos.core.kernel.client import default_local_channel
+
+OUT = Path(r"C:\T1\Python\preview_face.png")  # change folder if you use C:\1\Python
+
+speos = Speos(channel=default_local_channel(port=50098))
+p = Project(speos=speos)
+
+sensor = p.create_sensor(name="Sensor.1")
+sensor.commit()
+
+root = p.create_root_part().commit()
+body = root.create_body(name="TheBodyB").commit()
+face = body.create_face(name="TheFaceF")
+face.vertices = [0, 0, 0, 10, 0, 0, 0, 10, 0]
+face.facets = [0, 1, 2]
+face.normals = [0, 0, 1, 0, 0, 1, 0, 0, 1]
+face.commit()
+
+face1 = p.find(name="TheBodyB/TheFaceF", feature_type=Face)[0]
+source = p.create_source(name="Source.1", feature_type=SourceSurface)
+source.set_exitance_constant().geometries = [(face1, False)]
+source.commit()
+print("source committed, count", len(p.sources))
+
+print("saving picture to", OUT)
+p.preview(viz_args={"show_edges": True, "opacity": 0.9}, screenshot=str(OUT))
+print("PNG exists:", OUT.exists())
+
+# Interactive 3D window (close it to finish the script)
+print("a 3D window may open — rotate with the mouse, then close it")
+p.preview(viz_args={"show_edges": True, "opacity": 0.9})
+
+speos.close()
+print("closed")
