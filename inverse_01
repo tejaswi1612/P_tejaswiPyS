@@ -19,22 +19,24 @@ face1 = p.find(name="TheBodyB/TheFaceF", feature_type=Face)[0]
 
 source = p.create_source(name="Source.1", feature_type=SourceSurface)
 source.set_exitance_constant().geometries = [(face1, False)]
+# Inverse needs a broadband spectrum — not monochromatic
+source.spectrum.set_blackbody()
 source.commit()
-print("STEP 1  lamp ok")
+print("STEP 1  lamp + blackbody spectrum ok")
 
 sensor = p.create_sensor(name="Sensor.1")
 sensor.axis_system = [5, 5, 20, 1, 0, 0, 0, 1, 0, 0, 0, 1]
 sensor.integration_direction = [0, 0, -1]
 sensor.commit()
-print("STEP 2  meter above the lamp, looking down")
+print("STEP 2  sensor looking down")
 
 sim = p.create_simulation(name="Inverse.1", feature_type=SimulationInverse)
 sim.sensor_paths = [sensor]
 sim.source_paths = [source]
 sim.stop_condition_passes_number = 5
 sim.commit()
-print("STEP 3  Inverse job — rays from the sensor, not from the lamp")
+print("STEP 3  Inverse committed")
 print("STEP 4  computing...")
 print(sim.compute_CPU())
 speos.close()
-print("STEP 5  closed — open NEW Sensor.1.xmp in VPL (lx, not cd)")
+print("STEP 5  closed — open NEW Sensor.1.xmp (lx)")
