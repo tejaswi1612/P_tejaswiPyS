@@ -1,0 +1,95 @@
+from pathlib import Path
+
+from ansys.speos.core.speos import Speos
+from ansys.speos.core.project import Project
+from ansys.speos.core.component import LightBoxFileInstance
+from ansys.speos.core.generic.file_transfer import FileTransfer
+from ansys.speos.core.sensor import SensorIrradiance
+from ansys.speos.core.simulation import SimulationDirect
+from ansys.speos.core.kernel.client import default_local_channel
+
+SAVE = Path(r"C:\T1\Python\my_toy_scene.speoslightbox").resolve()
+OUT = Path(r"C:\T1\Python\reload_direct.png")
+
+speos = Speos(channel=default_local_channel(port=50098))
+p = Project(speos=speos)
+print("STEP 1  connected")
+
+# Upload saved LightBox into Speos RPC DB
+ft = FileTransfer(speos.client)
+if SAVE.is_file():
+    uri = ft.upload_file(SAVE).info.uri
+elif SAVE.is_dir():
+    names = [x.name for x in SAVE.iterdir() if x.is_file()]
+    main = next(
+        (n for n in names if n.lower().endswith((".speoslightbox", ".speos", ".sv5"))),
+        names[0],
+    )
+    print("STEP 2  folder files:", names, "main=", main)
+    uri = ft.upload_folder(SAVE, main_file_name=main)[0].info.uri
+else:
+    raise FileNotFoundError(SAVE)
+print("STEP 2  uri:", uri)
+
+# Import LightBox
+lb = p.create_lightbox(
+    name="LightBox.1",
+    lightbox=LightBoxFileInstance(file=uri, password=""),
+)
+lb.commit()
+print("STEP 3  lightbox imported")
+print("STEP 3  source_paths:", lb.source_paths)
+
+# Sensor above the triangle, looking down (anti-ray)
+sensor = p.create_sensor(name="Sensor.1", feature_type=SensorIrradiance)
+sensor.axis_system = [0, 0, 20, 1, 0, 0, 0, 1, 0, 0, 0, 1]
+dim = sensor.set_dimensions()
+dim.x_start = -20
+dim.x_end = 20
+dim.x_sampling = 50
+dim.y_start = -20
+dim.y_end = 20
+dim.y_sampling = 50
+sensor.integration_direction = [0, 0, -1]
+sensor.commit()
+print("STEP 4  sensor ready")
+
+# Direct sim: use LightBox sources
+sim = p.create_simulation(name="Direct.1", feature_type=SimulationDirect)
+sim.sensor_paths = [sensor]
+sim.source_paths = lb.source_paths
+sim.stop_condition_rays_number = 20000
+sim.commit()
+print("STEP 5  sim committed, computing...")
+
+job = sim.compute_CPU()
+print("STEP 6  compute done:", job)
+
+# Export first result map to PNG
+results = sim.get_result_file_uris() if hasattr(sim, "get_result_file_uris") else None
+print("STEP 7  results helper:", results)
+
+# Fallback: find XMP under temp jobs (same pattern as before)
+xmp = None
+if results:
+    for item in results:
+        s = str(item)
+        if s.lower().endswith(".xmp"):
+            xmp = Path(s)
+            break
+
+if xmp is None:
+    jobs = Path(r"C:\Users\tpasupu\AppData\Local\Temp\jobs")
+    xmps = sorted(jobs.rglob("*.xmp"), key=lambda p: p.stat().st_mtime, reverse=True)
+    xmp = xmps[0] if xmps else None
+
+print("STEP 7  xmp:", xmp)
+if xmp is None or not Path(xmp).exists():
+    raise FileNotFoundError("No XMP found after compute")
+
+maps = speos.client.maps()
+maps.export_xmp_to_image(str(xmp), str(OUT))
+print("STEP 8  PNG:", OUT.exists(), OUT)
+
+speos.close()
+print("STEP 9  done")
