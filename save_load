@@ -3,6 +3,7 @@ from ansys.speos.core.speos import Speos
 from ansys.speos.core.project import Project
 from ansys.speos.core.face import Face
 from ansys.speos.core.source import SourceSurface
+from ansys.speos.core.component import LightBoxFileInstance
 from ansys.speos.core.kernel.client import default_local_channel
 
 SAVE = Path(r"C:\T1\Python\my_toy_scene.speoslightbox")
@@ -23,21 +24,21 @@ source = p.create_source(name="Source.1", feature_type=SourceSurface)
 source.set_exitance_constant().geometries = [(face1, False)]
 source.spectrum.set_blackbody()
 source.commit()
-print("STEP 1  built toy scene")
-print("         scene_link methods:", [n for n in dir(p.scene_link) if not n.startswith("_")])
+print("STEP 1  built")
 
-# Correct API name: save_file (not save)
 p.scene_link.save_file(file_uri=str(SAVE))
-print("STEP 2  saved:", SAVE, "exists=", SAVE.exists())
-
+print("STEP 2  saved", SAVE, "exists=", SAVE.exists())
 speos.close()
 
-# Load into a new session
+# --- correct load for LightBox ---
 speos2 = Speos(channel=default_local_channel(port=50098))
-p2 = Project(speos=speos2, path=str(SAVE))
-print("STEP 3  loaded")
-print("         sources:", p2.sources)
-print("         sensors:", p2.sensors)
-print(p2)
+p2 = Project(speos=speos2)  # empty project first
+lb = p2.create_lightbox(
+    name="LightBox.1",
+    lightbox=LightBoxFileInstance(file=str(SAVE), password=""),
+)
+lb.commit()
+print("STEP 3  lightbox imported:", lb)
+print("         project:", p2)
 speos2.close()
 print("STEP 4  done")
