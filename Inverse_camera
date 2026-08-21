@@ -1,0 +1,42 @@
+from ansys.speos.core.speos import Speos
+from ansys.speos.core.project import Project
+from ansys.speos.core.face import Face
+from ansys.speos.core.source import SourceSurface
+from ansys.speos.core.sensor import SensorCamera
+from ansys.speos.core.simulation import SimulationInverse
+from ansys.speos.core.kernel.client import default_local_channel
+
+speos = Speos(channel=default_local_channel(port=50098))
+p = Project(speos=speos)
+root = p.create_root_part().commit()
+
+body = root.create_body(name="TheBodyB").commit()
+face = body.create_face(name="TheFaceF")
+face.vertices = [0, 0, 0, 10, 0, 0, 0, 10, 0]
+face.facets = [0, 1, 2]
+face.normals = [0, 0, 1, 0, 0, 1, 0, 0, 1]
+face.commit()
+face1 = p.find(name="TheBodyB/TheFaceF", feature_type=Face)[0]
+
+source = p.create_source(name="Source.1", feature_type=SourceSurface)
+source.set_exitance_constant().geometries = [(face1, False)]
+source.spectrum.set_blackbody()
+source.commit()
+print("STEP 1  lamp + blackbody ok")
+
+# Camera above the lamp, looking down (-Z)
+cam = p.create_sensor(name="Camera.1", feature_type=SensorCamera)
+cam.axis_system = [5, 5, 40, 1, 0, 0, 0, 1, 0, 0, 0, -1]
+cam.commit()
+print("STEP 2  camera committed")
+
+sim = p.create_simulation(name="Inverse.1", feature_type=SimulationInverse)
+sim.sensor_paths = [cam]
+sim.source_paths = [source]
+sim.stop_condition_passes_number = 20  # denser than 5
+sim.commit()
+print("STEP 3  Inverse + camera committed")
+print("STEP 4  computing...")
+print(sim.compute_CPU())
+speos.close()
+print("STEP 5  closed — open result XMP/PNG under Temp\\jobs")
