@@ -4,6 +4,7 @@ from ansys.speos.core.project import Project
 from ansys.speos.core.face import Face
 from ansys.speos.core.source import SourceSurface
 from ansys.speos.core.component import LightBoxFileInstance
+from ansys.speos.core.generic.file_transfer import FileTransfer
 from ansys.speos.core.kernel.client import default_local_channel
 
 SAVE = Path(r"C:\T1\Python\my_toy_scene.speoslightbox")
@@ -27,18 +28,25 @@ source.commit()
 print("STEP 1  built")
 
 p.scene_link.save_file(file_uri=str(SAVE))
-print("STEP 2  saved", SAVE, "exists=", SAVE.exists())
+print("STEP 2  saved on disk:", SAVE.exists(), SAVE)
+
+# Put the file into Speos RPC's file database
+ft = FileTransfer(speos.client)
+upload = ft.upload_file(SAVE)
+uri = upload.info.uri
+print("STEP 3  uploaded URI:", uri)
+
 speos.close()
 
-# --- correct load for LightBox ---
+# New session: import using the URI (GUID), not the Windows path
 speos2 = Speos(channel=default_local_channel(port=50098))
-p2 = Project(speos=speos2)  # empty project first
+p2 = Project(speos=speos2)
 lb = p2.create_lightbox(
     name="LightBox.1",
-    lightbox=LightBoxFileInstance(file=str(SAVE), password=""),
+    lightbox=LightBoxFileInstance(file=uri, password=""),
 )
 lb.commit()
-print("STEP 3  lightbox imported:", lb)
-print("         project:", p2)
+print("STEP 4  lightbox imported")
+print(p2)
 speos2.close()
-print("STEP 4  done")
+print("STEP 5  done")
