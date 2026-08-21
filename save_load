@@ -1,4 +1,5 @@
 from pathlib import Path
+
 from ansys.speos.core.speos import Speos
 from ansys.speos.core.project import Project
 from ansys.speos.core.face import Face
@@ -7,8 +8,9 @@ from ansys.speos.core.component import LightBoxFileInstance
 from ansys.speos.core.generic.file_transfer import FileTransfer
 from ansys.speos.core.kernel.client import default_local_channel
 
-SAVE = Path(r"C:\T1\Python\my_toy_scene.speoslightbox")
+SAVE = Path(r"C:\T1\Python\my_toy_scene.speoslightbox").resolve()
 
+# ---------- STEP 1: build toy scene ----------
 speos = Speos(channel=default_local_channel(port=50098))
 p = Project(speos=speos)
 
@@ -27,18 +29,50 @@ source.spectrum.set_blackbody()
 source.commit()
 print("STEP 1  built")
 
+# ---------- STEP 2: save to disk ----------
 p.scene_link.save_file(file_uri=str(SAVE))
-print("STEP 2  saved on disk:", SAVE.exists(), SAVE)
+print(
+    "STEP 2  saved:",
+    SAVE,
+    "exists=",
+    SAVE.exists(),
+    "is_file=",
+    SAVE.is_file(),
+    "is_dir=",
+    SAVE.is_dir(),
+)
+if SAVE.is_dir():
+    print("STEP 2  contents:", [x.name for x in SAVE.iterdir()])
 
-# Put the file into Speos RPC's file database
+# ---------- STEP 3: upload into Speos RPC file DB ----------
 ft = FileTransfer(speos.client)
-upload = ft.upload_file(SAVE)
-uri = upload.info.uri
+
+if SAVE.is_file():
+    upload = ft.upload_file(SAVE)
+    uri = upload.info.uri
+elif SAVE.is_dir():
+    names = [x.name for x in SAVE.iterdir() if x.is_file()]
+    if not names:
+        raise FileNotFoundError(f"No files inside lightbox folder: {SAVE}")
+    print("STEP 2c files in folder:", names)
+    main = next(
+        (
+            n
+            for n in names
+            if n.lower().endswith((".speoslightbox", ".speos", ".sv5"))
+        ),
+        names[0],
+    )
+    uploads = ft.upload_folder(SAVE, main_file_name=main)
+    uri = uploads[0].info.uri
+else:
+    raise FileNotFoundError(f"Save path missing: {SAVE}")
+
 print("STEP 3  uploaded URI:", uri)
 
 speos.close()
 
-# New session: import using the URI (GUID), not the Windows path
+# ---------- STEP 4: new session, load by URI ----------
 speos2 = Speos(channel=default_local_channel(port=50098))
 p2 = Project(speos=speos2)
 lb = p2.create_lightbox(
@@ -48,5 +82,6 @@ lb = p2.create_lightbox(
 lb.commit()
 print("STEP 4  lightbox imported")
 print(p2)
+
 speos2.close()
 print("STEP 5  done")
