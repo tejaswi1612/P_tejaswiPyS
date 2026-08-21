@@ -1,0 +1,56 @@
+from pathlib import Path
+from ansys.speos.core.speos import Speos
+from ansys.speos.core.project import Project
+from ansys.speos.core.face import Face
+from ansys.speos.core.source import SourceSurface
+from ansys.speos.core.kernel.client import default_local_channel
+
+SAVE = Path(r"C:\T1\Python\my_toy_scene.speos")
+
+speos = Speos(channel=default_local_channel(port=50098))
+
+# --- build once ---
+p = Project(speos=speos)
+root = p.create_root_part().commit()
+body = root.create_body(name="TheBodyB").commit()
+face = body.create_face(name="TheFaceF")
+face.vertices = [0, 0, 0, 10, 0, 0, 0, 10, 0]
+face.facets = [0, 1, 2]
+face.normals = [0, 0, 1, 0, 0, 1, 0, 0, 1]
+face.commit()
+face1 = p.find(name="TheBodyB/TheFaceF", feature_type=Face)[0]
+source = p.create_source(name="Source.1", feature_type=SourceSurface)
+source.set_exitance_constant().geometries = [(face1, False)]
+source.spectrum.set_blackbody()
+source.commit()
+print("STEP 1  built toy scene")
+
+# How save works depends on your PySpeos build — try these in order:
+saved = False
+for method_name in ("save", "save_file", "export"):
+    if hasattr(p, method_name):
+        getattr(p, method_name)(str(SAVE))
+        print("STEP 2  saved with", method_name, "->", SAVE)
+        saved = True
+        break
+
+if not saved:
+    # Fallback: scene API on some builds
+    try:
+        p.scene_link.save(str(SAVE))
+        print("STEP 2  saved via scene_link ->", SAVE)
+        saved = True
+    except Exception as e:
+        print("STEP 2  save failed:", e)
+        print("         print methods:", [n for n in dir(p) if "save" in n.lower()])
+
+speos.close()
+
+# --- load again ---
+speos2 = Speos(channel=default_local_channel(port=50098))
+p2 = Project(speos=speos2, path=str(SAVE))
+print("STEP 3  loaded project")
+print("         sources:", p2.sources)
+print("         sensors:", p2.sensors)
+speos2.close()
+print("STEP 4  done — check Explorer for", SAVE)
