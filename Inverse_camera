@@ -2,7 +2,6 @@ from ansys.speos.core.speos import Speos
 from ansys.speos.core.project import Project
 from ansys.speos.core.face import Face
 from ansys.speos.core.source import SourceSurface
-from ansys.speos.core.sensor import SensorCamera
 from ansys.speos.core.simulation import SimulationInverse
 from ansys.speos.core.kernel.client import default_local_channel
 
@@ -24,19 +23,20 @@ source.spectrum.set_blackbody()
 source.commit()
 print("STEP 1  lamp + blackbody ok")
 
-# Camera above the lamp, looking down (-Z)
-cam = p.create_sensor(name="Camera.1", feature_type=SensorCamera)
-cam.axis_system = [5, 5, 40, 1, 0, 0, 0, 1, 0, 0, 0, -1]
-cam.commit()
-print("STEP 2  camera committed")
+sensor = p.create_sensor(name="Sensor.1")
+sensor.set_type_colorimetric()
+sensor.axis_system = [5, 5, 20, 1, 0, 0, 0, 1, 0, 0, 0, 1]
+sensor.integration_direction = [0, 0, -1]
+sensor.commit()
+print("STEP 2  colorimetric sensor ok")
 
 sim = p.create_simulation(name="Inverse.1", feature_type=SimulationInverse)
-sim.sensor_paths = [cam]
+sim.sensor_paths = [sensor]
 sim.source_paths = [source]
-sim.stop_condition_passes_number = 20  # denser than 5
+sim.stop_condition_passes_number = 30  # denser than 5
 sim.commit()
-print("STEP 3  Inverse + camera committed")
-print("STEP 4  computing...")
+print("STEP 3  Inverse committed")
+print("STEP 4  computing (wait)...")
 print(sim.compute_CPU())
 speos.close()
-print("STEP 5  closed — open result XMP/PNG under Temp\\jobs")
+print("STEP 5  closed — open NEW Sensor.1.xmp")
